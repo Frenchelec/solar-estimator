@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Solar Estimator — On-the-Spot Quote Tool</title>
+<meta name="description" content="On-the-spot solar PV quoting tool — NZ defaults, all rates editable.">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Solar Quote">
+<script>
+/* apply saved theme before paint to avoid flash */
+try{ var _t=localStorage.getItem('solarEst.theme'); if(_t) document.documentElement.dataset.theme=_t; }catch(e){}
+</script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --line:#334155;
+    --txt:#e2e8f0; --muted:#94a3b8; --accent:#f59e0b; --accent2:#38bdf8;
+    --acc-txt:#0f172a; --good:#22c55e; --warn:#f97316; --bad:#ef4444; --radius:10px;
+  }
+  :root[data-theme=light]{
+    --bg:#f1f5f9; --panel:#ffffff; --panel2:#f8fafc; --line:#cbd5e1;
+    --txt:#0f172a; --muted:#475569; --accent:#b45309; --accent2:#0369a1;
+    --acc-txt:#ffffff; --good:#15803d; --warn:#c2410c;
+  }
+  *{box-sizing:border-box}
+  html,body{overscroll-behavior-y:none}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.4;
+    padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+  header{background:var(--panel);border-bottom:2px solid var(--accent);
+    padding:calc(12px + env(safe-area-inset-top)) 16px 12px;position:sticky;top:0;z-index:10;
+    display:flex;align-items:center;gap:10px}
+  header h1{margin:0;font-size:18px;display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+  header .sub{color:var(--muted);font-size:12px;margin-top:1px}
+  .sun{color:var(--accent);font-size:20px}
+  .iconbtn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);
+    min-width:44px;min-height:44px;font-size:18px;cursor:pointer}
+  #installBtn{font-size:13px;font-weight:600;padding:0 12px;color:var(--accent)}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 16px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:820px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .card h2{margin:0 0 12px;font-size:15px;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input[type=number],input[type=text],select{width:100%;padding:12px 10px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:16px;outline:none;min-height:46px}
+  input:focus,select:focus{border-color:var(--accent2)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  @media(max-width:480px){.row3{grid-template-columns:1fr 1fr}}
+  .toggle{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:6px}
+  .toggle button{flex:1;padding:13px 9px;min-height:46px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-weight:600}
+  .toggle button.active{background:var(--accent);color:var(--acc-txt)}
+  .hint{font-size:12px;color:var(--muted);margin-top:3px}
+  .chk{display:flex;align-items:center;gap:10px;margin:12px 0 4px;cursor:pointer;font-size:15px;color:var(--txt);min-height:44px}
+  .chk input{width:22px;height:22px;accent-color:var(--accent)}
+  details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+  summary{cursor:pointer;color:var(--accent2);font-size:14px;font-weight:600;list-style:none;padding:10px 0;min-height:24px}
+  summary::-webkit-details-marker{display:none}
+  summary::marker{content:""}
+  summary:before{content:"\25B8 ";color:var(--accent)}
+  details[open] summary:before{content:"\25BE "}
+  .hidden{display:none!important}
+  /* Results */
+  .results{grid-column:1/-1}
+  .headline{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:820px){.headline{grid-template-columns:1fr 1fr}}
+  .metric{background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:14px;text-align:center}
+  .metric .v{font-size:26px;font-weight:700;color:var(--accent)}
+  @media(max-width:480px){.metric .v{font-size:30px}}
+  .metric .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
+  .metric.blue .v{color:var(--accent2)}
+  .metric.green .v{color:var(--good)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.total td{font-weight:700;border-top:2px solid var(--accent);border-bottom:none;color:var(--accent)}
+  tr.sub td{color:var(--muted);font-size:13px}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:820px){.split{grid-template-columns:1fr}}
+  .bar{height:22px;background:var(--panel2);border-radius:6px;overflow:hidden;display:flex;margin:6px 0}
+  .bar span{display:block;height:100%}
+  .legend{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:4px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .btn{padding:13px 18px;min-height:46px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+    font-size:15px;cursor:pointer;font-weight:600}
+  .btn.primary{background:var(--accent);color:var(--acc-txt);border-color:var(--accent)}
+  .note{font-size:11px;color:var(--muted);margin-top:14px;border-top:1px dashed var(--line);padding-top:10px}
+  .warnbox{background:rgba(249,115,22,.12);border:1px solid var(--warn);color:#fdba74;padding:8px 10px;
+    border-radius:8px;font-size:12px;margin-top:10px}
+  :root[data-theme=light] .warnbox{color:#9a3412}
+  /* iOS install hint */
+  #iosHint{grid-column:1/-1;background:var(--panel);border:1px solid var(--accent2);border-radius:var(--radius);
+    padding:12px 14px;font-size:13px;display:flex;gap:12px;align-items:center}
+  #iosHint .x{margin-left:auto;flex:none}
+  /* sticky live-total bar (mobile) */
+  #stickyBar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:none;cursor:pointer;
+    background:var(--panel);border-top:2px solid var(--accent);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    justify-content:space-between;align-items:center;gap:10px}
+  #stickyBar .p{font-size:20px;font-weight:700;color:var(--accent)}
+  #stickyBar .s{font-size:12px;color:var(--muted);text-align:right}
+  @media(max-width:820px){#stickyBar{display:flex}}
+  @media print{
+    header,#stickyBar,#iosHint{display:none!important}
+    .inputs,.actions,summary,.toggle button:not(.active){display:none}
+    body{background:#fff;color:#000;padding-bottom:0}
+    .card,.metric{background:#fff;border-color:#ccc}
+    .card h2{color:#b45309!important;border-color:#ccc}
+    .metric .v{color:#b45309!important}
+    .metric .l,.legend,.note,.hint,tr.sub td{color:#333!important}
+    td,th{color:#000;border-color:#ddd}
+    tr.total td{color:#000!important;border-color:#999}
+    .metric .v,.bar span,.dot{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .bar{background:#eee}
+    .warnbox{background:#fff!important;color:#000!important;border-color:#999!important}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="sun">&#9728;</span>
+    <span>Solar Estimator
+      <div class="sub">On-the-spot PV quoting &middot; NZ defaults &middot; all rates editable</div>
+    </span>
+  </h1>
+  <button class="iconbtn hidden" id="installBtn" title="Install app">Install</button>
+  <button class="iconbtn" id="themeBtn" title="Light / dark mode">&#9789;</button>
+</header>
+
+<div class="wrap">
+
+  <div id="iosHint" class="hidden">
+    <span>&#128241;</span>
+    <span>Install this on your phone: tap <b>Share</b> &#8593; then <b>&ldquo;Add to Home Screen&rdquo;</b>. Works offline once installed.</span>
+    <button class="iconbtn x" id="iosHintClose">&#10005;</button>
+  </div>
+
+  <!-- ============ SYSTEM INPUTS ============ -->
+  <div class="card inputs">
+    <h2>1 &middot; System</h2>
+
+    <label>Job type</label>
+    <div class="toggle" id="segToggle">
+      <button data-seg="res" class="active">Residential</button>
+      <button data-seg="com">Commercial</button>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Panel wattage (W)</label>
+        <input type="number" id="panelW" value="440" min="100" max="1000" step="5" inputmode="numeric">
+      </div>
+      <div>
+        <label>Number of panels</label>
+        <input type="number" id="panelQty" value="15" min="1" max="100000" step="1" inputmode="numeric">
+      </div>
+    </div>
+    <div class="hint">System size auto-calculates: panels &times; panel W.</div>
+
+    <label>System size (kWp) — auto, or override</label>
+    <input type="number" id="sizeKw" value="6.6" min="0.1" step="0.1" inputmode="decimal">
+    <div class="hint">Editing this recalculates panel count from panel wattage. Pricing always uses panels &times; wattage.</div>
+
+    <label>Roof / mount type</label>
+    <select id="mount">
+      <option value="1.0">Corrugated tin (standard)</option>
+      <option value="1.15">Tile / Decramastic (harder)</option>
+      <option value="1.1">Membrane / flat roof (ballast/tilt)</option>
+      <option value="1.25">Ground mount</option>
+      <option value="1.3">Multi-plane / steep / 2-storey access</option>
+    </select>
+    <div class="hint">Applies a labour multiplier in itemised mode.</div>
+
+    <label>Phase / supply</label>
+    <select id="phase">
+      <option value="single">Single-phase</option>
+      <option value="three">Three-phase</option>
+    </select>
+  </div>
+
+  <!-- ============ PRICING INPUTS ============ -->
+  <div class="card inputs">
+    <h2>2 &middot; Pricing</h2>
+
+    <div class="toggle" id="priceToggle">
+      <button data-mode="quick" class="active">Quick ($/W)</button>
+      <button data-mode="item">Itemised build-up</button>
+    </div>
+
+    <!-- QUICK MODE -->
+    <div id="quickBox">
+      <label>Installed rate ($ per watt, ex GST)</label>
+      <input type="number" id="perW" value="1.95" min="0.1" step="0.05" inputmode="decimal">
+      <div class="hint" id="perWhint">Auto-suggested by size tier — type your own rate to lock it in.</div>
+    </div>
+
+    <!-- ITEMISED MODE -->
+    <div id="itemBox" class="hidden">
+      <div class="row">
+        <div><label>Modules $/W</label><input type="number" id="iMod" value="0.55" min="0" step="0.01" inputmode="decimal"></div>
+        <div><label>Inverter $/W</label><input type="number" id="iInv" value="0.30" min="0" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div class="row">
+        <div><label>Mounting/rail $/W</label><input type="number" id="iMount" value="0.18" min="0" step="0.01" inputmode="decimal"></div>
+        <div><label>DC/AC cable + isolators $/W</label><input type="number" id="iCable" value="0.12" min="0" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div class="row">
+        <div><label>Switchboard/metering ($)</label><input type="number" id="iSwitch" value="650" min="0" step="50" inputmode="numeric"></div>
+        <div><label>Monitoring/comms ($)</label><input type="number" id="iMonitor" value="250" min="0" step="50" inputmode="numeric"></div>
+      </div>
+      <div class="row3">
+        <div><label>Labour hrs</label><input type="number" id="iHrs" value="26" min="0" step="1" inputmode="numeric"></div>
+        <div><label>Rate $/hr</label><input type="number" id="iRate" value="95" min="0" step="5" inputmode="numeric"></div>
+        <div><label>Access/scaffold ($)</label><input type="number" id="iScaffold" value="600" min="0" step="50" inputmode="numeric"></div>
+      </div>
+      <div class="row">
+        <div><label>Consent/EDB/inspection ($)</label><input type="number" id="iConsent" value="450" min="0" step="50" inputmode="numeric"></div>
+        <div><label>Misc / consumables ($)</label><input type="number" id="iMisc" value="300" min="0" step="50" inputmode="numeric"></div>
+      </div>
+      <label>Margin on cost (%)</label>
+      <input type="number" id="iMargin" value="22" min="0" max="200" step="1" inputmode="numeric">
+      <div class="hint">Markup applied to total material + labour cost (22% on cost &asymp; 18% gross margin on sell).</div>
+    </div>
+
+    <!-- BATTERY -->
+    <label class="chk"><input type="checkbox" id="batOn"> Include battery storage</label>
+    <div id="batBox" class="hidden">
+      <div class="row">
+        <div><label>Capacity (kWh)</label><input type="number" id="batKwh" value="10" min="0" step="0.5" inputmode="decimal"></div>
+        <div><label>$ per kWh installed</label><input type="number" id="batPerKwh" value="1050" min="0" step="50" inputmode="numeric"></div>
+      </div>
+      <div class="hint">Includes hybrid inverter allowance &amp; install, ex GST. Typical NZ $1,000&ndash;1,500/kWh (small batteries at the top end).</div>
+    </div>
+
+    <label class="chk"><input type="checkbox" id="gstOn" checked> Show prices GST-inclusive (15%)</label>
+    <div class="hint">Residential quotes usually GST-inclusive; commercial often ex-GST.</div>
+  </div>
+
+  <!-- ============ SAVINGS INPUTS ============ -->
+  <div class="card inputs">
+    <h2>3 &middot; Generation &amp; Savings</h2>
+
+    <label>Region yield (kWh per kWp / year)</label>
+    <select id="yield">
+      <option value="1250">Auckland / Northland (~1250)</option>
+      <option value="1200">Waikato / BoP (~1200)</option>
+      <option value="1150">Wellington / Lower NI (~1150)</option>
+      <option value="1300">Nelson / Marlborough (~1300)</option>
+      <option value="1350">Central Otago (~1350)</option>
+      <option value="1100">Southland / West Coast (~1100)</option>
+    </select>
+
+    <label>Orientation &amp; tilt performance (%)</label>
+    <input type="number" id="derate" value="90" min="0" max="100" step="1" inputmode="numeric">
+    <div class="hint">100% = ideal north-facing ~30&deg; pitch. NE/NW ~90%, E/W ~80%, shading lowers further.</div>
+
+    <div class="row">
+      <div><label>Electricity price ($/kWh)</label><input type="number" id="importPrice" value="0.38" min="0" step="0.01" inputmode="decimal"></div>
+      <div><label>Export/buyback ($/kWh)</label><input type="number" id="exportPrice" value="0.10" min="0" step="0.01" inputmode="decimal"></div>
+    </div>
+    <div class="hint">NZ average residential ~40c/kWh incl GST (MBIE, Feb 2026). Use an ex-GST rate for commercial quotes. Buyback typically 8&ndash;23c.</div>
+
+    <label>Self-consumption of solar (%)</label>
+    <input type="number" id="selfUse" value="40" min="0" max="100" step="5" inputmode="numeric">
+    <div class="hint" id="selfHint">Share used on-site vs exported. Battery lifts this to 65&ndash;85%.</div>
+
+    <details>
+      <summary>Optional: bill check &amp; escalation</summary>
+      <div class="row">
+        <div><label>Current annual power bill ($)</label><input type="number" id="annualBill" value="" min="0" placeholder="e.g. 3200" inputmode="numeric"></div>
+        <div><label>Price inflation %/yr</label><input type="number" id="escalation" value="3" min="0" max="20" step="0.5" inputmode="decimal"></div>
+      </div>
+      <div class="hint">Bill is optional — used only to show % offset. Escalation feeds lifetime savings.</div>
+    </details>
+  </div>
+
+  <!-- ============ RESULTS ============ -->
+  <div class="card results" id="results"></div>
+
+</div>
+
+<div id="stickyBar" title="Jump to full results">
+  <div class="p" id="sbPrice">$0</div>
+  <div class="s" id="sbSub">&nbsp;</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const STORE_KEY = 'solarEst.v1';
+let seg = 'res';
+let priceMode = 'quick';
+let perWDirty = false;   // user has typed their own $/W — never auto-overwrite
+let gstDirty = false;    // user has manually set the GST toggle
+let prevSelfUse = null;  // self-use before battery was ticked
+
+// ---- default profiles per segment ----
+const profiles = {
+  res: { panelQty:15, panelW:440, selfUse:40, mount:'1.0', margin:22, hrs:26 },
+  com: { panelQty:70, panelW:550, selfUse:65, mount:'1.1', margin:18, hrs:90 }
+};
+
+// ---- $/W suggestion by system size (ex GST, NZ 2026 ballpark) ----
+function suggestPerW(kw, segment){
+  if(segment==='com'){
+    if(kw<15) return 1.90; if(kw<30) return 1.70; if(kw<100) return 1.45; return 1.25;
+  }
+  if(kw<3) return 2.80; if(kw<5) return 2.20; if(kw<8) return 1.95;
+  if(kw<12) return 1.80; return 1.65;
+}
+
+const fmt = n => '$' + Math.round(n).toLocaleString('en-NZ');
+const fmt1 = n => n.toLocaleString('en-NZ',{maximumFractionDigits:1});
+const clamp = (v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+// safe numeric read: blank/garbage -> 0, negatives -> 0
+const num = id => Math.max(0, +$(id).value || 0);
+
+// true system size — panels × wattage is ALWAYS the pricing source of truth
+function trueKw(){
+  return Math.round(num('panelQty')) * num('panelW') / 1000;
+}
+
+// ---- segment toggle ----
+$('segToggle').addEventListener('click', e=>{
+  if(!e.target.dataset.seg) return;
+  seg = e.target.dataset.seg;
+  [...$('segToggle').children].forEach(b=>b.classList.toggle('active', b.dataset.seg===seg));
+  const p = profiles[seg];
+  $('panelQty').value=p.panelQty; $('panelW').value=p.panelW;
+  // keep battery-appropriate self-use if a battery is on the quote
+  $('selfUse').value = $('batOn').checked ? Math.max(p.selfUse, 70) : p.selfUse;
+  $('mount').value=p.mount;
+  $('iMargin').value=p.margin; $('iHrs').value=p.hrs;
+  if(!gstDirty) $('gstOn').checked = (seg==='res');
+  perWDirty = false;                 // new job type -> fresh suggested rate
+  syncSizeFromPanels(); autoPerW(); calc();
+});
+
+// ---- price mode toggle ----
+$('priceToggle').addEventListener('click', e=>{
+  if(!e.target.dataset.mode) return;
+  priceMode = e.target.dataset.mode;
+  [...$('priceToggle').children].forEach(b=>b.classList.toggle('active', b.dataset.mode===priceMode));
+  $('quickBox').classList.toggle('hidden', priceMode!=='quick');
+  $('itemBox').classList.toggle('hidden', priceMode!=='item');
+  calc();
+});
+
+// ---- battery toggle ----
+$('batOn').addEventListener('change', ()=>{
+  $('batBox').classList.toggle('hidden', !$('batOn').checked);
+  if($('batOn').checked){
+    prevSelfUse = +$('selfUse').value;
+    if(+$('selfUse').value < 65) $('selfUse').value = 70;
+  } else if(prevSelfUse !== null){
+    $('selfUse').value = prevSelfUse;   // restore pre-battery assumption
+    prevSelfUse = null;
+  }
+  calc();
+});
+
+// ---- GST manual override tracking ----
+$('gstOn').addEventListener('change', ()=>{ gstDirty = true; });
+
+// ---- size <-> panels sync (plain numbers only — never locale strings) ----
+function syncSizeFromPanels(){
+  $('sizeKw').value = Math.round(trueKw()*100)/100;
+}
+$('panelQty').addEventListener('input', ()=>{ syncSizeFromPanels(); autoPerW(); calc(); });
+$('panelW').addEventListener('input', ()=>{ syncSizeFromPanels(); autoPerW(); calc(); });
+$('sizeKw').addEventListener('input', ()=>{
+  const w = num('panelW');
+  if(w >= 50){                        // guard: never divide by a blank/tiny wattage
+    const qty = Math.round((num('sizeKw')*1000)/w);
+    $('panelQty').value = clamp(qty, 1, 100000);
+  }
+  autoPerW(); calc();
+});
+// on blur, snap the size field to the real panels × wattage figure
+$('sizeKw').addEventListener('change', ()=>{ syncSizeFromPanels(); calc(); });
+
+function autoPerW(){
+  const s = suggestPerW(trueKw(), seg).toFixed(2);
+  $('perWhint').textContent = 'Suggested for this size: $'+s+'/W — type your own rate to lock it in.';
+  if(!perWDirty) $('perW').value = s;
+}
+$('perW').addEventListener('input', ()=>{ perWDirty = true; });
+
+// recalc on any input
+document.querySelectorAll('input,select').forEach(el=>{
+  el.addEventListener('input', calc);
+  el.addEventListener('change', calc);
+});
+
+// stop desktop scroll-wheel from silently changing focused number inputs
+document.addEventListener('wheel', ()=>{
+  const a = document.activeElement;
+  if(a && a.type === 'number') a.blur();
+}, {passive:true});
+
+// ======================= CORE CALC =======================
+function calc(){
+  const kw = trueKw();
+  const gst = $('gstOn').checked ? 1.15 : 1.0;
+  const gstLabel = $('gstOn').checked ? 'incl GST' : 'ex GST';
+
+  // ---------- COST ----------
+  let cost, breakdown=[];
+  if(priceMode==='quick'){
+    const pw = num('perW');
+    cost = kw*1000*pw;
+    breakdown.push(['System @ $'+pw.toFixed(2)+'/W', cost]);
+  } else {
+    const W = kw*1000;
+    const mountMult = +$('mount').value;
+    const mod = W*num('iMod');
+    const inv = W*num('iInv');
+    const mnt = W*num('iMount');
+    const cab = W*num('iCable');
+    const sw  = num('iSwitch');
+    const mon = num('iMonitor');
+    const lab = num('iHrs')*num('iRate')*mountMult;
+    const scaf= num('iScaffold');
+    const con = num('iConsent');
+    const misc= num('iMisc');
+    const sub = mod+inv+mnt+cab+sw+mon+lab+scaf+con+misc;
+    const margin = sub*(num('iMargin')/100);
+    cost = sub+margin;
+    breakdown.push(['Modules', mod],['Inverter', inv],['Mounting/rail', mnt],
+      ['DC/AC cable + isolators', cab],['Switchboard/metering', sw],['Monitoring/comms', mon],
+      ['Labour ('+num('iHrs')+'h @ $'+num('iRate')+', ×'+mountMult+')', lab],
+      ['Access/scaffold', scaf],['Consent/EDB/inspection', con],['Misc/consumables', misc],
+      ['Margin ('+num('iMargin')+'%)', margin]);
+  }
+
+  // ---------- BATTERY ----------
+  let batCost=0, batKwh=0;
+  if($('batOn').checked){
+    batKwh = num('batKwh');
+    batCost = batKwh*num('batPerKwh');
+    breakdown.push(['Battery ('+batKwh+' kWh)', batCost]);
+  }
+
+  const totalEx = cost + batCost;
+  const total = totalEx*gst;
+
+  // ---------- GENERATION ----------
+  const yieldPerKw = +$('yield').value;
+  const derate = clamp(num('derate'),0,100)/100;
+  const annualGen = kw * yieldPerKw * derate;           // kWh/yr
+  const selfPct = clamp(num('selfUse'),0,100)/100;
+  const selfKwh = annualGen*selfPct;
+  const exportKwh = annualGen*(1-selfPct);
+
+  const impP = num('importPrice');
+  const expP = num('exportPrice');
+  const savingSelf = selfKwh*impP;      // avoided purchase
+  const savingExport = exportKwh*expP;  // export credit
+  const annualSaving = savingSelf + savingExport;
+
+  // payback (simple, on total incl GST paid by customer)
+  const payback = annualSaving>0 && total>0 ? total/annualSaving : 0;
+
+  // lifetime (25yr) with escalation + panel degradation 0.5%/yr
+  const esc = clamp(num('escalation'),0,20)/100;
+  let life=0, val=annualSaving;
+  for(let y=0;y<25;y++){ life += val*Math.pow(1-0.005,y); val*=(1+esc); }
+  const roi = total>0 ? (life-total)/total*100 : 0;
+
+  // bill offset
+  const bill = num('annualBill');
+  const offsetPct = bill>0 ? Math.min(100, annualSaving/bill*100) : null;
+
+  // ---------- WARNINGS ----------
+  let warns=[];
+  if(seg==='res' && kw>15) warns.push('System >15 kW is large for residential — check EDB export limits & phase.');
+  if($('phase').value==='single' && kw>5) warns.push('Many NZ networks cap single-phase inverter export at ~5 kW — check the local EDB; may need export limiting or 3-phase.');
+  if(!$('batOn').checked && selfPct>0.55) warns.push('Self-consumption >55% is optimistic without a battery for most homes.');
+  if($('batOn').checked && selfPct<0.5) warns.push('Battery included but self-consumption is set low — battery benefit is not being counted.');
+  if(expP>impP && impP>0) warns.push('Export rate exceeds import price — double-check buyback tariff.');
+  if(payback>0 && payback<3) warns.push('Payback under 3 years — sanity-check the input rates.');
+
+  // ---------- RENDER ----------
+  const gp = $('gstOn').checked;
+  // round each GST-inclusive row, then make the total the sum of rounded rows so the table always reconciles
+  let rowSum = 0;
+  const bd = breakdown.map(([k,v])=>{ const rv=Math.round(v*gst); rowSum+=rv;
+    return `<tr><td>${k}</td><td class="num">$${rv.toLocaleString('en-NZ')}</td></tr>`; }).join('');
+  const totalShown = rowSum;
+  // derive ex-GST + $/W from the SHOWN total so every figure on the page reconciles
+  const exShown = gp ? Math.round(totalShown/1.15) : totalShown;
+  const effPerW = kw>0 ? totalShown/(kw*1000) : 0;
+  const effLabel = gp ? 'Effective $/W (incl GST)' : 'Effective $/W (ex GST)';
+  const selfPctShown = Math.round(selfPct*100);
+
+  $('results').innerHTML = `
+    <h2>Estimate — ${seg==='res'?'Residential':'Commercial'} ${fmt1(kw)} kWp</h2>
+    <div class="headline">
+      <div class="metric"><div class="v">$${totalShown.toLocaleString('en-NZ')}</div><div class="l">Install price (${gstLabel})</div></div>
+      <div class="metric blue"><div class="v">${fmt1(annualGen)}</div><div class="l">kWh / year</div></div>
+      <div class="metric green"><div class="v">${fmt(annualSaving)}</div><div class="l">Savings / year</div></div>
+      <div class="metric"><div class="v">${payback>0?fmt1(payback)+' yr':'—'}</div><div class="l">Simple payback</div></div>
+    </div>
+
+    <div class="split">
+      <div>
+        <h2 style="font-size:13px">Cost breakdown</h2>
+        <table>${bd}
+          <tr class="total"><td>Total (${gstLabel})</td><td class="num">$${totalShown.toLocaleString('en-NZ')}</td></tr>
+          ${gp?`<tr class="sub"><td>Ex-GST</td><td class="num">$${exShown.toLocaleString('en-NZ')}</td></tr>`:''}
+          <tr class="sub"><td>${effLabel}</td><td class="num">$${effPerW.toFixed(2)}</td></tr>
+        </table>
+      </div>
+      <div>
+        <h2 style="font-size:13px">Generation &amp; savings</h2>
+        <table>
+          <tr><td>Annual generation</td><td class="num">${fmt1(annualGen)} kWh</td></tr>
+          <tr><td>Self-consumed (${selfPctShown}%)</td><td class="num">${fmt1(selfKwh)} kWh</td></tr>
+          <tr><td>Exported</td><td class="num">${fmt1(exportKwh)} kWh</td></tr>
+          <tr class="sub"><td>&nbsp;&nbsp;Value of self-use @ $${impP.toFixed(2)}</td><td class="num">${fmt(savingSelf)}</td></tr>
+          <tr class="sub"><td>&nbsp;&nbsp;Export credit @ $${expP.toFixed(2)}</td><td class="num">${fmt(savingExport)}</td></tr>
+          <tr class="total"><td>Annual saving</td><td class="num">${fmt(annualSaving)}</td></tr>
+          ${offsetPct!==null?`<tr class="sub"><td>Offsets ~${Math.round(offsetPct)}% of current bill</td><td class="num">${fmt(bill)}/yr</td></tr>`:''}
+          <tr><td>25-yr savings (esc ${(esc*100).toFixed(1)}%, 0.5%/yr degrade)</td><td class="num">${fmt(life)}</td></tr>
+          <tr class="total"><td>25-yr net ROI</td><td class="num">${Math.round(roi).toLocaleString('en-NZ')}%</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Where your solar goes</div>
+      <div class="bar">
+        <span style="width:${selfPctShown}%;background:var(--good)"></span>
+        <span style="width:${100-selfPctShown}%;background:var(--accent2)"></span>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--good)"></i>Self-used ${selfPctShown}%</span>
+        <span><i class="dot" style="background:var(--accent2)"></i>Exported ${100-selfPctShown}%</span>
+      </div>
+    </div>
+
+    ${warns.length?`<div class="warnbox">&#9888; ${warns.join('<br>&#9888; ')}</div>`:''}
+
+    <div class="actions">
+      <button class="btn primary hidden" id="shareBtn" onclick="shareSummary()">Share summary</button>
+      <button class="btn primary" id="printBtn" onclick="window.print()">Print / Save PDF</button>
+      <button class="btn" onclick="copySummary(this)">Copy summary</button>
+      <button class="btn" onclick="resetAll()">Reset to defaults</button>
+    </div>
+
+    <div class="note">
+      Ballpark estimate only — not a fixed quote. Assumes standard install, compliant AS/NZS 4777 grid connection,
+      no major switchboard upgrade or trenching unless added. Verify EDB export approval, roof structure, and shading on site.
+      Default rates reflect mid-2026 NZ market and are fully editable. GST ${gp?'included':'excluded'}.
+    </div>
+  `;
+
+  // buttons: share where supported; hide print inside an installed iOS app (no print UI there)
+  if(navigator.share) $('shareBtn').classList.remove('hidden');
+  if(isStandalone() && isIOS()) $('printBtn').classList.add('hidden');
+
+  // sticky mobile bar
+  $('sbPrice').textContent = '$'+totalShown.toLocaleString('en-NZ');
+  $('sbSub').innerHTML = fmt1(kw)+' kWp &middot; '+(payback>0?fmt1(payback)+' yr payback':gstLabel);
+
+  window._summary = `SOLAR ESTIMATE — ${seg==='res'?'Residential':'Commercial'} ${fmt1(kw)} kWp
+Install price (${gstLabel}): $${totalShown.toLocaleString('en-NZ')}  (eff $${effPerW.toFixed(2)}/W)
+Annual generation: ${fmt1(annualGen)} kWh
+Annual saving: ${fmt(annualSaving)}  |  Simple payback: ${payback>0?fmt1(payback)+' yrs':'—'}
+25-yr savings: ${fmt(life)}  |  Net ROI: ${Math.round(roi).toLocaleString('en-NZ')}%
+${$('batOn').checked?'Includes '+batKwh+' kWh battery. ':''}Estimate only — verify on site.`;
+
+  saveState();
+}
+
+// ======================= ACTIONS =======================
+function shareSummary(){
+  if(navigator.share){
+    navigator.share({title:'Solar estimate', text: window._summary||''}).catch(()=>{});
+  }
+}
+function copySummary(btn){
+  const text = window._summary || '';
+  const done = ()=>{ const t=btn.textContent; btn.textContent='Copied!'; setTimeout(()=>btn.textContent=t,1500); };
+  const fail = ()=>{ btn.textContent='Copy failed'; setTimeout(()=>btn.textContent='Copy summary',1500); };
+  const fallback = ()=>{
+    const ta=document.createElement('textarea'); ta.value=text; ta.readOnly=true;
+    ta.style.position='fixed'; ta.style.opacity='0'; ta.style.top='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta);
+    ok ? done() : fail();
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(fallback);
+  } else { fallback(); }
+}
+function resetAll(){
+  if(!confirm('Reset all fields to defaults?')) return;
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+  location.reload();
+}
+
+// ======================= PERSISTENCE =======================
+// a phone call or app switch can reload the page — never lose a quote in progress
+const FIELDS = ['panelW','panelQty','sizeKw','mount','phase','perW','iMod','iInv','iMount','iCable',
+  'iSwitch','iMonitor','iHrs','iRate','iScaffold','iConsent','iMisc','iMargin','batKwh','batPerKwh',
+  'yield','derate','importPrice','exportPrice','selfUse','annualBill','escalation'];
+function saveState(){
+  try{
+    const s = { seg, priceMode, perWDirty, gstDirty, prevSelfUse,
+      batOn:$('batOn').checked, gstOn:$('gstOn').checked, v:{} };
+    FIELDS.forEach(id=>s.v[id]=$(id).value);
+    localStorage.setItem(STORE_KEY, JSON.stringify(s));
+  }catch(e){}
+}
+function restoreState(){
+  let s=null;
+  try{ s = JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){}
+  if(!s) return false;
+  try{
+    FIELDS.forEach(id=>{ if(s.v && s.v[id]!==undefined) $(id).value = s.v[id]; });
+    seg = s.seg==='com'?'com':'res';
+    priceMode = s.priceMode==='item'?'item':'quick';
+    perWDirty = !!s.perWDirty; gstDirty = !!s.gstDirty;
+    prevSelfUse = (s.prevSelfUse===null||s.prevSelfUse===undefined)?null:+s.prevSelfUse;
+    $('batOn').checked = !!s.batOn;
+    $('gstOn').checked = !!s.gstOn;
+    [...$('segToggle').children].forEach(b=>b.classList.toggle('active', b.dataset.seg===seg));
+    [...$('priceToggle').children].forEach(b=>b.classList.toggle('active', b.dataset.mode===priceMode));
+    $('quickBox').classList.toggle('hidden', priceMode!=='quick');
+    $('itemBox').classList.toggle('hidden', priceMode!=='item');
+    $('batBox').classList.toggle('hidden', !$('batOn').checked);
+    return true;
+  }catch(e){ return false; }
+}
+
+// ======================= THEME =======================
+$('themeBtn').addEventListener('click', ()=>{
+  const light = document.documentElement.dataset.theme !== 'light';
+  document.documentElement.dataset.theme = light ? 'light' : '';
+  try{ localStorage.setItem('solarEst.theme', light?'light':''); }catch(e){}
+  $('themeBtn').innerHTML = light ? '&#9788;' : '&#9789;';
+});
+if(document.documentElement.dataset.theme==='light') $('themeBtn').innerHTML='&#9788;';
+
+// ======================= PWA / INSTALL =======================
+function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function isStandalone(){
+  return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+}
+if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+  addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault(); deferredPrompt=e; $('installBtn').classList.remove('hidden');
+});
+$('installBtn').addEventListener('click', async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice.catch(()=>{});
+  deferredPrompt=null; $('installBtn').classList.add('hidden');
+});
+window.addEventListener('appinstalled', ()=>$('installBtn').classList.add('hidden'));
+// iOS has no install prompt — show a one-time hint
+try{
+  if(isIOS() && !isStandalone() && !localStorage.getItem('solarEst.iosHintDismissed')){
+    $('iosHint').classList.remove('hidden');
+  }
+}catch(e){}
+$('iosHintClose').addEventListener('click', ()=>{
+  $('iosHint').classList.add('hidden');
+  try{ localStorage.setItem('solarEst.iosHintDismissed','1'); }catch(e){}
+});
+
+// sticky bar tap -> jump to results
+$('stickyBar').addEventListener('click', ()=>$('results').scrollIntoView({behavior:'smooth'}));
+
+// ======================= INIT =======================
+const restored = restoreState();
+if(!restored) syncSizeFromPanels();
+autoPerW();
+calc();
+</script>
+</body>
+</html>

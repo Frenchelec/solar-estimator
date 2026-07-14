@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Estimator — QR Install Poster</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:#e2e8f0;color:#0f172a;display:flex;flex-direction:column;align-items:center;padding:24px}
+  .setup{background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:16px 20px;max-width:640px;width:100%;margin-bottom:24px}
+  .setup label{font-size:13px;color:#475569;display:block;margin-bottom:6px}
+  .setup .row{display:flex;gap:10px}
+  .setup input{flex:1;padding:12px;font-size:16px;border:1px solid #cbd5e1;border-radius:8px}
+  .setup button{padding:12px 20px;font-size:15px;font-weight:600;background:#f59e0b;border:none;border-radius:8px;cursor:pointer}
+  .setup .hint{font-size:12px;color:#64748b;margin-top:8px}
+  /* poster: A4-ish sheet */
+  .poster{background:#fff;width:640px;max-width:100%;padding:48px 40px;border-radius:6px;
+    box-shadow:0 4px 20px rgba(0,0,0,.15);text-align:center}
+  .poster .brand{font-size:14px;letter-spacing:2px;text-transform:uppercase;color:#b45309;font-weight:700}
+  .poster h1{margin:8px 0 4px;font-size:34px}
+  .poster h1 .sun{color:#f59e0b}
+  .poster .tag{color:#475569;font-size:16px;margin-bottom:28px}
+  #qr{display:inline-block;padding:18px;border:3px solid #0f172a;border-radius:14px;min-height:100px}
+  #qr img,#qr canvas{display:block}
+  .url{font-size:15px;color:#0369a1;margin:14px 0 30px;word-break:break-all;font-weight:600}
+  .steps{display:grid;grid-template-columns:1fr 1fr;gap:18px;text-align:left;font-size:14px}
+  .steps h3{margin:0 0 6px;font-size:15px}
+  .steps ol{margin:0;padding-left:20px;color:#334155}
+  .steps li{margin-bottom:4px}
+  .foot{margin-top:28px;border-top:1px dashed #cbd5e1;padding-top:14px;font-size:12px;color:#64748b}
+  .actions{margin:20px 0}
+  .actions button{padding:12px 24px;font-size:15px;font-weight:600;background:#0f172a;color:#fff;border:none;border-radius:8px;cursor:pointer}
+  @media print{
+    body{background:#fff;padding:0}
+    .setup,.actions{display:none}
+    .poster{box-shadow:none;width:100%;border-radius:0}
+  }
+</style>
+</head>
+<body>
+
+<div class="setup">
+  <label>Paste the app's web address (from Netlify / your host), then print:</label>
+  <div class="row">
+    <input type="url" id="urlIn" placeholder="https://french-solar.netlify.app" autofocus>
+    <button onclick="makeQR()">Make QR</button>
+  </div>
+  <div class="hint">This box won't print — only the poster below does. Needs internet once to load the QR generator.</div>
+</div>
+
+<div class="poster">
+  <div class="brand">French Electrical</div>
+  <h1><span class="sun">&#9728;</span> Solar Estimator</h1>
+  <div class="tag">On-the-spot solar quoting &middot; works offline once installed</div>
+  <div id="qr">Paste the app URL above to generate the QR code</div>
+  <div class="url" id="urlText"></div>
+  <div class="steps">
+    <div>
+      <h3>&#63743; iPhone</h3>
+      <ol>
+        <li>Scan the code with your camera</li>
+        <li>Opens in <b>Safari</b></li>
+        <li>Tap <b>Share</b> &#8593; &rarr; <b>Add to Home Screen</b></li>
+      </ol>
+    </div>
+    <div>
+      <h3>&#129302; Android</h3>
+      <ol>
+        <li>Scan the code with your camera</li>
+        <li>Opens in <b>Chrome</b></li>
+        <li>Tap the <b>Install</b> button in the app</li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot">Estimates are ballpark only — verify EDB export approval, roof structure and shading on site.</div>
+</div>
+
+<div class="actions"><button onclick="window.print()">Print poster</button></div>
+
+<script>
+function makeQR(){
+  const url = document.getElementById('urlIn').value.trim();
+  if(!url) return alert('Paste the app URL first');
+  const box = document.getElementById('qr');
+  box.innerHTML = '';
+  new QRCode(box, { text:url, width:260, height:260, correctLevel:QRCode.CorrectLevel.M });
+  document.getElementById('urlText').textContent = url;
+  try{ localStorage.setItem('solarQrUrl', url); }catch(e){}
+}
+try{
+  const saved = localStorage.getItem('solarQrUrl');
+  if(saved){ document.getElementById('urlIn').value = saved; makeQR(); }
+}catch(e){}
+document.getElementById('urlIn').addEventListener('keydown', e=>{ if(e.key==='Enter') makeQR(); });
+</script>
+</body>
+</html>
